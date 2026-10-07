@@ -1,0 +1,6 @@
+@WebAPI_Site_Seling_TShirts_HostAddress = http://localhost:5162
+
+GET {{WebAPI_Site_Seling_TShirts_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
