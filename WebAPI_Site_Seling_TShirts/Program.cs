@@ -69,3 +69,43 @@ string CreateToken(User user)
 
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
+
+app.MapPost("/register", async (RegisterRequest req, BD_WebAPI_Site_Seling_TShirtsContext db) =>
+{
+    if (await db.Users.AnyAsync(u => u.Login == req.Login))
+        return Results.Conflict("Логин уже занят");
+
+    var hasher = new PasswordHasher<User>();
+    var user = new User
+    {
+        Login = req.Login,
+        Role = "user",
+        TelephoneNumber = req.TelephoneNumber,
+        OrderAddress = req.OrderAddress
+    };
+    user.PasswordHash = hasher.HashPassword(user, req.Password);
+
+    db.Users.Add(user);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { user.UserId, user.Login });
+});
+
+app.MapPost("/login", async (LoginRequest req, BD_WebAPI_Site_Seling_TShirtsContext db) =>
+{
+    var user = await db.Users.FirstOrDefaultAsync(u => u.Login == req.Login);
+    if (user is null) return Results.Unauthorized();
+
+    var hasher = new PasswordHasher<User>();
+    var result = hasher.VerifyHashedPassword(user, user.PasswordHash, req.Password);
+
+    if (result == PasswordVerificationResult.Failed)
+        return Results.Unauthorized();
+
+    return Results.Ok(new { token = CreateToken(user) });
+});
+
+app.Run();
+
+record LoginRequest(string Login, string Password);
+record RegisterRequest(string Login, string Password, string? TelephoneNumber, string? OrderAddress);
