@@ -105,7 +105,35 @@ app.MapPost("/login", async (LoginRequest req, BD_WebAPI_Site_Seling_TShirtsCont
     return Results.Ok(new { token = CreateToken(user) });
 });
 
+app.MapGet("/clothes", async (BD_WebAPI_Site_Seling_TShirtsContext db) =>
+{
+    var items = await db.Clothes
+        .AsNoTracking()
+        .Where(c => c.IsForSale == 1)
+        .Select(c => new
+        { 
+            c.ClothId,
+            c.ItemName,
+            c.Price,
+            c.ClothType,
+            c.Descr,
+            c.SellCounter,
+            Sizes = c.ClothesSizes.Select(s => new
+            {
+                s.ClothSizeId,
+                s.SizeString,
+                s.SizeInt,
+                s.QuantityInStock
+            })
+        })
+        .ToListAsync();
+
+    return Results.Ok(items);
+});
+
 app.Run();
 
 record LoginRequest(string Login, string Password);
 record RegisterRequest(string Login, string Password, string? TelephoneNumber, string? OrderAddress);
+record CreateOrderRequest(string CustomerFio, List<CreateOrderItem> Items);
+record CreateOrderItem(int ClothSizeId, int Quantity);
