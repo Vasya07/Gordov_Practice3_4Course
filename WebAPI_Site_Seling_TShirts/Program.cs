@@ -131,6 +131,72 @@ app.MapGet("/clothes", async (BD_WebAPI_Site_Seling_TShirtsContext db) =>
     return Results.Ok(items);
 });
 
+app.MapPost("/orders", async (CreateOrderRequest req, ClaimsPrincipal principal, BD_WebAPI_Site_Seling_TShirtsContext db) =>
+{
+    var userId = int.Parse(principal.FindFirst("user_id")!.Value);
+    var order = new Order
+    {
+        CustomerId = userId,
+        CreateDatetime = DateTime.UtcNow,
+        CurrentOrderStatus = "new",
+        CustomerFio = req.CustomerFio
+    };
+
+    foreach (var item in req.Items)
+    {
+        var size = await db.ClothesSizes
+            .Include(s => s.Cloth)
+            .FirstOrDefaultAsync(s => s.ClothSizeId == item.ClothSizeId);
+
+        if (size is null) return Results.BadRequest($"Размер {item.ClothSizeId} не найден");
+        if (size.QuantityInStock < item.Quantity)
+            return Results.BadRequest($"Недостаточно товара {size.Cloth.ItemName} ({size.SizeString})");
+
+        size.QuantityInStock -= item.Quantity;
+        order.OrderItems.Add(new OrderItem
+        {
+            ClothSizeId = size.ClothSizeId,
+            Quantity = item.Quantity,
+            PriceAtMoment = size.Cloth.Price,
+            ClothNameSnapshot = size.Cloth.ItemName,
+            SizeStringSnapshot = size.SizeString
+        });
+    }
+
+    db.Orders.Add(order);
+    await db.SaveChangesAsync();
+
+    return Results.Ok(new { order.OrderId, Message = "Заказ успешно создан" });
+})
+.RequireAuthorization();
+
+app.MapGet("/my/orders", async (ClaimsPrincipal principal, BD_WebAPI_Site_Seling_TShirtsContext db) =>
+{
+    var userId = int.Parse(principal.FindFirst("user_id")!.Value);
+    var orders = await db.Orders
+        .AsNoTracking()
+        .Where(o => o.CustomerId == userId)
+        .OrderByDescending(o => o.CreateDatetime)
+        .Select(o => new
+        {
+            o.OrderId,
+            o.CreateDatetime,
+            o.CurrentOrderStatus,
+            o.CustomerFio,
+            Items = o.OrderItems.Select(i => new
+            {
+                i.ClothNameSnapshot,
+                i.SizeStringSnapshot,
+                i.Quantity,
+                i.PriceAtMoment
+            })
+        })
+        .ToListAsync();
+
+    return Results.Ok(orders);
+})
+.RequireAuthorization();
+
 app.Run();
 
 record LoginRequest(string Login, string Password);
