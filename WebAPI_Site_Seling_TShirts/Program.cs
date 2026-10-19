@@ -197,6 +197,25 @@ app.MapGet("/my/orders", async (ClaimsPrincipal principal, BD_WebAPI_Site_Seling
 })
 .RequireAuthorization();
 
+app.MapGet("/admin/orders", async (BD_WebAPI_Site_Seling_TShirtsContext db) =>
+{
+    var orders = await db.Orders
+        .AsNoTracking()
+        .OrderByDescending(o => o.CreateDatetime)
+        .Select(o => new
+        {
+            o.OrderId,
+            o.CreateDatetime,
+            o.CurrentOrderStatus,
+            o.CustomerFio,
+            CustomerLogin = o.Customer.Login,
+            Total = o.OrderItems.Sum(i => i.PriceAtMoment * i.Quantity)
+        })
+        .ToListAsync();
+
+    return Results.Ok(orders);
+})
+.RequireAuthorization(p => p.RequireRole("admin"));
 app.Run();
 
 record LoginRequest(string Login, string Password);
